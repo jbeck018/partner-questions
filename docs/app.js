@@ -13,6 +13,8 @@ const currentSectionSummary = document.getElementById('currentSectionSummary');
 const prevSectionButton = document.getElementById('prevSectionButton');
 const nextSectionButton = document.getElementById('nextSectionButton');
 const completionPanel = document.getElementById('completionPanel');
+const reviewGrid = document.getElementById('reviewGrid');
+const backToFormButton = document.getElementById('backToFormButton');
 const exportCsvButton = document.getElementById('exportCsvButton');
 const exportJsonButton = document.getElementById('exportJsonButton');
 const importJsonInput = document.getElementById('importJsonInput');
@@ -22,7 +24,8 @@ const state = {
   schema: FORM_SCHEMA,
   answers: {},
   timers: new Map(),
-  currentSectionIndex: 0
+  currentSectionIndex: 0,
+  reviewMode: false
 };
 
 function setStatus(message, className = '') {
@@ -240,6 +243,39 @@ function createInput(field) {
   return wrapper;
 }
 
+function renderReviewSummary() {
+  reviewGrid.innerHTML = '';
+
+  state.schema.forEach((section, index) => {
+    const visibleQuestions = getVisibleQuestions(section);
+    const sectionProgress = getSectionProgress(section);
+    const card = document.createElement('article');
+    card.className = 'review-card';
+
+    const topQuestions = visibleQuestions.slice(0, 4).map((question) => {
+      const complete = isQuestionComplete(question);
+      return `<li><strong>${question.number}</strong> — ${question.prompt} <span class="review-count">${complete ? 'Complete' : 'Needs review'}</span></li>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="review-card-head">
+        <h3>${section.title}</h3>
+        <span class="review-count">${sectionProgress.complete}/${sectionProgress.total} complete</span>
+      </div>
+      <ol class="review-list">${topQuestions}</ol>
+    `;
+
+    card.addEventListener('click', () => {
+      state.reviewMode = false;
+      state.currentSectionIndex = index;
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    reviewGrid.appendChild(card);
+  });
+}
+
 function updateProgressUi() {
   const progress = getProgress();
   progressCount.textContent = `${progress.complete} / ${progress.total} questions`;
@@ -247,16 +283,26 @@ function updateProgressUi() {
   progressNote.textContent = progress.allComplete
     ? 'All visible questions are complete.'
     : `${progress.total - progress.complete} questions remaining.`;
-  completionPanel.classList.toggle('hidden', !progress.allComplete);
+  completionPanel.classList.toggle('hidden', !(progress.allComplete && state.reviewMode));
 
-  const currentSection = state.schema[state.currentSectionIndex];
-  const sectionProgress = getSectionProgress(currentSection);
-  currentSectionTitle.textContent = currentSection.title;
-  currentSectionSummary.textContent = `${sectionProgress.complete} of ${sectionProgress.total} questions completed in this section. ${getSectionDescription(currentSection)}`;
+  if (progress.allComplete && state.reviewMode) {
+    currentSectionTitle.textContent = 'Final review';
+    currentSectionSummary.textContent = 'Use this summary to jump back into any section before exporting.';
+    renderReviewSummary();
+  } else {
+    const currentSection = state.schema[state.currentSectionIndex];
+    const sectionProgress = getSectionProgress(currentSection);
+    currentSectionTitle.textContent = currentSection.title;
+    currentSectionSummary.textContent = `${sectionProgress.complete} of ${sectionProgress.total} questions completed in this section. ${getSectionDescription(currentSection)}`;
+  }
 
-  prevSectionButton.disabled = state.currentSectionIndex === 0;
-  nextSectionButton.disabled = state.currentSectionIndex === state.schema.length - 1;
-  nextSectionButton.textContent = state.currentSectionIndex === state.schema.length - 1 ? 'Last section' : 'Next section';
+  prevSectionButton.disabled = state.reviewMode || state.currentSectionIndex === 0;
+  nextSectionButton.disabled = state.reviewMode;
+  nextSectionButton.textContent = progress.allComplete && state.currentSectionIndex === state.schema.length - 1
+    ? 'Review & export'
+    : state.currentSectionIndex === state.schema.length - 1
+      ? 'Last section'
+      : 'Next section';
 }
 
 function renderSectionNav() {
@@ -281,6 +327,7 @@ function renderSectionNav() {
 
     navLink.addEventListener('click', (event) => {
       event.preventDefault();
+      state.reviewMode = false;
       state.currentSectionIndex = index;
       render();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -292,6 +339,8 @@ function renderSectionNav() {
 
 function renderCurrentSection() {
   app.innerHTML = '';
+  if (state.reviewMode) return;
+
   const section = state.schema[state.currentSectionIndex];
   const visibleQuestions = getVisibleQuestions(section);
 
@@ -374,12 +423,13 @@ function renderCurrentSection() {
 
 function render() {
   renderSectionNav();
-  renderCurrentSection();
   updateProgressUi();
+  renderCurrentSection();
 }
 
 function queueSave(key, value) {
   state.answers[key] = value;
+  state.reviewMode = false;
   if (affectsVisibility(key) || key.startsWith('a1_partner_') || key.startsWith('d2_partner_')) {
     render();
   } else {
@@ -492,12 +542,15 @@ function importJsonFile(file) {
 function clearSavedData() {
   if (!window.confirm('Clear all saved answers in this browser?')) return;
   state.answers = {};
+  state.reviewMode = false;
+  state.currentSectionIndex = 0;
   localStorage.removeItem(STORAGE_KEY);
   render();
   setStatus('Saved data cleared', 'saved');
 }
 
 function goToPreviousSection() {
+  state.reviewMode = false;
   if (state.currentSectionIndex === 0) return;
   state.currentSectionIndex -= 1;
   render();
@@ -505,7 +558,16 @@ function goToPreviousSection() {
 }
 
 function goToNextSection() {
-  if (state.currentSectionIndex >= state.schema.length - 1) return;
+  const progress = getProgress();
+  if (state.currentSectionIndex >= state.schema.length - 1) {
+    if (progress.allComplete) {
+      state.reviewMode = true;
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    return;
+  }
+  state.reviewMode = false;
   state.currentSectionIndex += 1;
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -518,6 +580,10 @@ function bindActions() {
   clearDataButton.addEventListener('click', clearSavedData);
   prevSectionButton.addEventListener('click', goToPreviousSection);
   nextSectionButton.addEventListener('click', goToNextSection);
+  backToFormButton.addEventListener('click', () => {
+    state.reviewMode = false;
+    render();
+  });
 }
 
 function init() {

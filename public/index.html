@@ -88,14 +88,16 @@
           <div id="app"></div>
 
           <section class="completion hidden" id="completionPanel">
-            <div>
-              <span class="eyebrow subtle">Ready to export</span>
-              <h2>Worksheet complete</h2>
+            <div class="completion-copy">
+              <span class="eyebrow subtle">Final review</span>
+              <h2>Review before export</h2>
               <p>
-                Everything visible is complete. Export CSV for comparison or JSON for backup/import.
+                Everything is complete. Do one final pass across the section summary below, then export CSV or JSON.
               </p>
             </div>
+            <div class="review-grid" id="reviewGrid"></div>
             <div class="completion-actions">
+              <button class="button secondary" id="backToFormButton" type="button">Back to form</button>
               <button class="button" id="exportCsvButton" type="button">Export CSV</button>
               <button class="button secondary" id="exportJsonButton" type="button">Export JSON</button>
             </div>
