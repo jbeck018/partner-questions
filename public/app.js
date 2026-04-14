@@ -42,7 +42,9 @@ const state = {
     openQuestionId: null,
     loadingQuestionId: null,
     responses: {},
-    mode: 'explain'
+    mode: 'explain',
+    followUps: {},
+    followUpDrafts: {}
   }
 };
 
@@ -283,11 +285,22 @@ async function ensureAiEngine() {
   return state.ai.engine;
 }
 
-async function requestAiHelp(question, mode) {
+function getAiCacheKey(questionId, mode) {
+  return `${questionId}::${mode}`;
+}
+
+async function requestAiHelp(question, mode, { force = false } = {}) {
   state.ai.openQuestionId = question.id;
   state.ai.mode = mode;
-  state.ai.loadingQuestionId = question.id;
   state.ai.error = '';
+
+  const cacheKey = getAiCacheKey(question.id, mode);
+  if (!force && state.ai.responses[cacheKey]?.content) {
+    render();
+    return;
+  }
+
+  state.ai.loadingQuestionId = question.id;
   render();
 
   try {
@@ -302,10 +315,55 @@ async function requestAiHelp(question, mode) {
     });
 
     const content = stringifyAiContent(reply.choices?.[0]?.message?.content);
-    state.ai.responses[question.id] = { mode, content };
+    state.ai.responses[cacheKey] = {
+      mode,
+      content,
+      updatedAt: new Date().toISOString()
+    };
+    state.ai.followUps[cacheKey] = [];
   } catch (error) {
     console.error(error);
     state.ai.error = error.message || 'AI help failed to load.';
+  } finally {
+    state.ai.loadingQuestionId = null;
+    render();
+  }
+}
+
+async function askAiFollowUp(question) {
+  const cacheKey = getAiCacheKey(question.id, state.ai.mode);
+  const draft = (state.ai.followUpDrafts[cacheKey] || '').trim();
+  const cached = state.ai.responses[cacheKey];
+  if (!draft || !cached?.content) return;
+
+  state.ai.loadingQuestionId = question.id;
+  state.ai.error = '';
+  render();
+
+  try {
+    const engine = await ensureAiEngine();
+    const history = state.ai.followUps[cacheKey] || [];
+    const reply = await engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: AI_SYSTEM_PROMPT },
+        { role: 'user', content: buildAiPrompt(question, state.ai.mode) },
+        { role: 'assistant', content: cached.content },
+        ...history.flatMap((item) => ([
+          { role: 'user', content: item.question },
+          { role: 'assistant', content: item.answer }
+        ])),
+        { role: 'user', content: `Follow-up question: ${draft}\nAnswer briefly and clearly. Not legal advice.` }
+      ],
+      temperature: 0.2,
+      max_tokens: 220
+    });
+
+    const answer = stringifyAiContent(reply.choices?.[0]?.message?.content);
+    state.ai.followUps[cacheKey] = [...history, { question: draft, answer }];
+    state.ai.followUpDrafts[cacheKey] = '';
+  } catch (error) {
+    console.error(error);
+    state.ai.error = error.message || 'Follow-up question failed.';
   } finally {
     state.ai.loadingQuestionId = null;
     render();
@@ -546,20 +604,57 @@ function renderCurrentSection() {
     card.appendChild(aiActions);
 
     if (state.ai.openQuestionId === question.id) {
+      const cacheKey = getAiCacheKey(question.id, state.ai.mode);
+      const responseRecord = state.ai.responses[cacheKey];
+      const response = responseRecord?.content || '';
+      const followUps = state.ai.followUps[cacheKey] || [];
+
       const aiPanel = document.createElement('div');
       aiPanel.className = 'ai-panel';
 
       const aiPanelHeader = document.createElement('div');
       aiPanelHeader.className = 'ai-panel-header';
-      aiPanelHeader.innerHTML = `<strong>AI help</strong><span class="review-count">${state.ai.mode}</span>`;
+
+      const leftHeader = document.createElement('div');
+      leftHeader.innerHTML = `<strong>AI help</strong><span class="review-count">${state.ai.mode}</span>`;
+
+      const headerActions = document.createElement('div');
+      headerActions.className = 'ai-panel-actions';
+
+      const rerunButton = document.createElement('button');
+      rerunButton.type = 'button';
+      rerunButton.className = 'button ghost ai-rerun';
+      rerunButton.textContent = 'Re-run';
+      rerunButton.addEventListener('click', () => requestAiHelp(question, state.ai.mode, { force: true }));
+
+      const closeButton = document.createElement('button');
+      closeButton.type = 'button';
+      closeButton.className = 'button ghost ai-rerun';
+      closeButton.textContent = 'Close';
+      closeButton.addEventListener('click', () => {
+        state.ai.openQuestionId = null;
+        state.ai.error = '';
+        render();
+      });
+
+      headerActions.append(rerunButton, closeButton);
+      aiPanelHeader.append(leftHeader, headerActions);
       aiPanel.appendChild(aiPanelHeader);
+
+      const aiStatus = document.createElement('div');
+      aiStatus.className = 'ai-status';
+      if (responseRecord?.updatedAt) {
+        aiStatus.textContent = `Cached response · ${new Date(responseRecord.updatedAt).toLocaleTimeString()}`;
+      } else {
+        aiStatus.textContent = 'No cached response yet.';
+      }
+      aiPanel.appendChild(aiStatus);
 
       const aiBody = document.createElement('div');
       aiBody.className = 'ai-panel-body';
-      const response = state.ai.responses[question.id]?.content || '';
 
       if (state.ai.loadingQuestionId === question.id) {
-        aiBody.textContent = state.ai.progress || 'Loading local AI helper…';
+        aiBody.innerHTML = `<div class="ai-loading"><span class="spinner"></span><span>${state.ai.progress || 'Loading local AI helper…'}</span></div>`;
       } else if (state.ai.error) {
         aiBody.textContent = state.ai.error;
         aiBody.classList.add('error-text');
@@ -570,6 +665,42 @@ function renderCurrentSection() {
       }
 
       aiPanel.appendChild(aiBody);
+
+      if (followUps.length) {
+        const followUpList = document.createElement('div');
+        followUpList.className = 'followup-list';
+        followUps.forEach((item) => {
+          const block = document.createElement('div');
+          block.className = 'followup-item';
+          block.innerHTML = `<div class="followup-q"><strong>You asked:</strong> ${item.question}</div><div class="followup-a"><strong>AI:</strong> ${item.answer}</div>`;
+          followUpList.appendChild(block);
+        });
+        aiPanel.appendChild(followUpList);
+      }
+
+      if (response) {
+        const followUpComposer = document.createElement('div');
+        followUpComposer.className = 'followup-composer';
+
+        const followUpInput = document.createElement('textarea');
+        followUpInput.className = 'followup-input';
+        followUpInput.placeholder = 'Ask a follow-up question about this item…';
+        followUpInput.value = state.ai.followUpDrafts[cacheKey] || '';
+        followUpInput.addEventListener('input', (event) => {
+          state.ai.followUpDrafts[cacheKey] = event.target.value;
+        });
+
+        const followUpButton = document.createElement('button');
+        followUpButton.type = 'button';
+        followUpButton.className = 'button secondary';
+        followUpButton.textContent = state.ai.loadingQuestionId === question.id ? 'Working…' : 'Ask follow-up';
+        followUpButton.disabled = state.ai.loadingQuestionId === question.id;
+        followUpButton.addEventListener('click', () => askAiFollowUp(question));
+
+        followUpComposer.append(followUpInput, followUpButton);
+        aiPanel.appendChild(followUpComposer);
+      }
+
       card.appendChild(aiPanel);
     }
 

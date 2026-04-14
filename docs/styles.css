@@ -415,7 +415,24 @@ a { color: inherit; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+}
+
+.ai-panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-rerun {
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.ai-status {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .ai-panel-body {
@@ -424,8 +441,60 @@ a { color: inherit; }
   line-height: 1.6;
 }
 
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(72, 104, 71, 0.2);
+  border-top-color: var(--primary);
+  animation: spin 0.9s linear infinite;
+}
+
+.followup-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.followup-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.64);
+  border: 1px solid rgba(72, 104, 71, 0.08);
+}
+
+.followup-q,
+.followup-a {
+  color: var(--text);
+}
+
+.followup-a {
+  margin-top: 8px;
+}
+
+.followup-composer {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.followup-input {
+  min-height: 90px;
+}
+
 .error-text {
   color: var(--danger);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .fields-grid {
