@@ -2,9 +2,11 @@
   "name": "partnership-form",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Static partnership worksheet form with browser-local autosave",
   "scripts": {
     "serve": "python3 -m http.server 3000",
-    "sync:docs": "./sync-docs.sh"
+    "sync:docs": "./sync-docs.sh",
+    "test:export": "node tests/export-smoke.mjs"
   }
 }

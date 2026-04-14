@@ -1,4 +1,5 @@
 import { FORM_SCHEMA } from './schema-data.js';
+import { buildCsv, flattenFields } from './export-utils.js';
 
 const STORAGE_KEY = 'partnership-worksheet-answers-v2';
 
@@ -472,39 +473,8 @@ function queueSave(key, value) {
   state.timers.set(key, timer);
 }
 
-function flattenFields() {
-  return state.schema.flatMap((section) =>
-    section.questions.flatMap((question) =>
-      question.fields.map((field) => ({
-        section: section.title,
-        questionNumber: question.number,
-        prompt: question.prompt,
-        key: field.key,
-        label: field.label,
-        value: state.answers[field.key] ?? ''
-      }))
-    )
-  );
-}
-
-function csvEscape(value) {
-  const stringValue = value == null ? '' : String(value);
-  return /[",\n]/.test(stringValue) ? `"${stringValue.replace(/"/g, '""')}"` : stringValue;
-}
-
-function buildCsv() {
-  const rows = [['section', 'question_number', 'prompt', 'field_key', 'field_label', 'value']];
-  for (const field of flattenFields()) {
-    rows.push([
-      field.section,
-      field.questionNumber,
-      field.prompt,
-      field.key,
-      field.label,
-      typeof field.value === 'object' ? JSON.stringify(field.value) : field.value
-    ]);
-  }
-  return rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+function getFlatRows() {
+  return flattenFields(state.schema, state.answers);
 }
 
 function downloadFile(filename, content, type) {
@@ -521,7 +491,7 @@ function downloadFile(filename, content, type) {
 
 function exportCsv() {
   if (!getProgress().allComplete) return;
-  downloadFile('partnership-worksheet-export.csv', buildCsv(), 'text/csv;charset=utf-8');
+  downloadFile('partnership-worksheet-export.csv', buildCsv(state.schema, state.answers), 'text/csv;charset=utf-8');
   setStatus('CSV exported', 'saved');
 }
 
@@ -531,7 +501,7 @@ function exportJson() {
     exportedAt: new Date().toISOString(),
     progress: getProgress(),
     answers: state.answers,
-    rows: flattenFields()
+    rows: getFlatRows()
   };
   downloadFile('partnership-worksheet-export.json', JSON.stringify(payload, null, 2), 'application/json');
   setStatus('JSON exported', 'saved');

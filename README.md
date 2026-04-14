@@ -89,6 +89,11 @@ To sync deploy files after changes:
 npm run sync:docs
 ```
 
+To run the CSV export smoke test with dummy data:
+```bash
+npm run test:export
+```
+
 ## GitHub Pages deployment
 1. Create a GitHub repository
 2. Push this project to the repository
