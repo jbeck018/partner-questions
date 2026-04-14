@@ -2,6 +2,14 @@ import { FORM_SCHEMA } from './schema-data.js';
 import { buildCsv, flattenFields } from './export-utils.js';
 
 const STORAGE_KEY = 'partnership-worksheet-answers-v2';
+const AI_MODEL = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+const AI_SYSTEM_PROMPT = `You are a plain-language business worksheet explainer.
+Explain what a partnership worksheet question means in simple terms.
+Do not give legal advice.
+Do not pretend to know the user's business.
+Be concise, practical, and easy to scan.
+When helpful, use short bullets.
+Never answer as if a single choice is universally correct.`;
 
 const app = document.getElementById('app');
 const sectionNav = document.getElementById('sectionNav');
@@ -25,7 +33,17 @@ const state = {
   answers: {},
   timers: new Map(),
   currentSectionIndex: 0,
-  reviewMode: false
+  reviewMode: false,
+  ai: {
+    engine: null,
+    status: 'idle',
+    progress: '',
+    error: '',
+    openQuestionId: null,
+    loadingQuestionId: null,
+    responses: {},
+    mode: 'explain'
+  }
 };
 
 function setStatus(message, className = '') {
@@ -206,6 +224,92 @@ function getSectionDescription(section) {
     'section-d': 'Capture any final considerations, signatures, and witness details.'
   };
   return descriptions[section.id] || 'Complete each question in this section before moving on.';
+}
+
+function stringifyAiContent(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => typeof part === 'string' ? part : part?.text || '').join('').trim();
+  }
+  return String(content || '').trim();
+}
+
+function formatAiProgress(progress) {
+  if (!progress) return 'Preparing local AI helper…';
+  if (typeof progress.text === 'string' && progress.text.trim()) return progress.text.trim();
+  if (typeof progress.progress === 'number') return `Loading local AI helper… ${Math.round(progress.progress * 100)}%`;
+  return 'Preparing local AI helper…';
+}
+
+function buildAiPrompt(question, mode) {
+  const visibleFields = getVisibleFields(question)
+    .map((field) => `- ${field.label}${hasValue(state.answers[field.key]) ? `: ${state.answers[field.key]}` : ''}`)
+    .join('\n');
+
+  const intents = {
+    explain: 'Explain what this question means in plain English and why it matters.',
+    example: 'Give a short example of the kind of answer a partnership might write here. Make it clear this is only an example, not advice.',
+    discuss: 'List 3 short discussion points the partners should align on before answering.'
+  };
+
+  return `Section: ${state.schema[state.currentSectionIndex].title}\nQuestion: ${question.number} — ${question.prompt}\nVisible fields:\n${visibleFields || '- No visible fields'}\n\nTask: ${intents[mode]}\n\nRequirements:\n- Keep the response under 160 words.\n- Use clear, non-legal language.\n- Add a final line: \"Not legal advice.\"`;
+}
+
+async function ensureAiEngine() {
+  if (state.ai.engine) return state.ai.engine;
+  if (!navigator.gpu) {
+    throw new Error('This browser does not support WebGPU, which is required for local AI help.');
+  }
+
+  state.ai.status = 'loading';
+  state.ai.error = '';
+  state.ai.progress = 'Preparing local AI helper…';
+  render();
+
+  const webllm = await import('https://esm.run/@mlc-ai/web-llm');
+  const appConfig = { ...webllm.prebuiltAppConfig, cacheBackend: 'indexeddb' };
+
+  state.ai.engine = await webllm.CreateMLCEngine(AI_MODEL, {
+    appConfig,
+    initProgressCallback: (progress) => {
+      state.ai.progress = formatAiProgress(progress);
+      render();
+    }
+  });
+
+  state.ai.status = 'ready';
+  state.ai.progress = 'AI helper is ready in this browser.';
+  render();
+  return state.ai.engine;
+}
+
+async function requestAiHelp(question, mode) {
+  state.ai.openQuestionId = question.id;
+  state.ai.mode = mode;
+  state.ai.loadingQuestionId = question.id;
+  state.ai.error = '';
+  render();
+
+  try {
+    const engine = await ensureAiEngine();
+    const reply = await engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: AI_SYSTEM_PROMPT },
+        { role: 'user', content: buildAiPrompt(question, mode) }
+      ],
+      temperature: 0.2,
+      max_tokens: 220
+    });
+
+    const content = stringifyAiContent(reply.choices?.[0]?.message?.content);
+    state.ai.responses[question.id] = { mode, content };
+  } catch (error) {
+    console.error(error);
+    state.ai.error = error.message || 'AI help failed to load.';
+  } finally {
+    state.ai.loadingQuestionId = null;
+    render();
+  }
 }
 
 function createInput(field) {
@@ -409,9 +513,66 @@ function renderCurrentSection() {
     fieldsGrid.className = 'fields-grid';
     question.fields.forEach((field) => fieldsGrid.appendChild(createInput(field)));
 
+    const aiActions = document.createElement('div');
+    aiActions.className = 'ai-actions';
+
+    const explainButton = document.createElement('button');
+    explainButton.type = 'button';
+    explainButton.className = 'text-action';
+    explainButton.textContent = 'Explain';
+    explainButton.addEventListener('click', () => requestAiHelp(question, 'explain'));
+
+    const exampleButton = document.createElement('button');
+    exampleButton.type = 'button';
+    exampleButton.className = 'text-action';
+    exampleButton.textContent = 'Example answer';
+    exampleButton.addEventListener('click', () => requestAiHelp(question, 'example'));
+
+    const discussButton = document.createElement('button');
+    discussButton.type = 'button';
+    discussButton.className = 'text-action';
+    discussButton.textContent = 'What should we discuss?';
+    discussButton.addEventListener('click', () => requestAiHelp(question, 'discuss'));
+
+    const aiNote = document.createElement('span');
+    aiNote.className = 'ai-note';
+    aiNote.textContent = 'AI help runs locally in your browser after first load.';
+
+    aiActions.append(explainButton, exampleButton, discussButton, aiNote);
+
     card.append(meta, title);
     if (helpText) card.appendChild(help);
     card.appendChild(fieldsGrid);
+    card.appendChild(aiActions);
+
+    if (state.ai.openQuestionId === question.id) {
+      const aiPanel = document.createElement('div');
+      aiPanel.className = 'ai-panel';
+
+      const aiPanelHeader = document.createElement('div');
+      aiPanelHeader.className = 'ai-panel-header';
+      aiPanelHeader.innerHTML = `<strong>AI help</strong><span class="review-count">${state.ai.mode}</span>`;
+      aiPanel.appendChild(aiPanelHeader);
+
+      const aiBody = document.createElement('div');
+      aiBody.className = 'ai-panel-body';
+      const response = state.ai.responses[question.id]?.content || '';
+
+      if (state.ai.loadingQuestionId === question.id) {
+        aiBody.textContent = state.ai.progress || 'Loading local AI helper…';
+      } else if (state.ai.error) {
+        aiBody.textContent = state.ai.error;
+        aiBody.classList.add('error-text');
+      } else if (response) {
+        aiBody.textContent = response;
+      } else {
+        aiBody.textContent = 'Choose an AI help option above. First use may take a minute while the local model downloads and is cached.';
+      }
+
+      aiPanel.appendChild(aiBody);
+      card.appendChild(aiPanel);
+    }
+
     questionList.appendChild(card);
   });
 

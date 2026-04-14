@@ -15,6 +15,7 @@ A **static** web app for `Partnership Worksheet.pdf`.
 - exports **JSON** for backup or machine processing
 - imports JSON back into the form
 - keeps data isolated to the current browser/device
+- includes optional browser-local AI help for explaining difficult questions
 
 ## Storage model
 This version has **no backend**.
@@ -107,6 +108,27 @@ npm run test:export
 
 Your site will appear at a URL like:
 - `https://your-username.github.io/your-repo-name/`
+
+## AI help
+The worksheet includes optional AI help powered by **WebLLM**.
+
+Current model:
+- `Qwen2.5-0.5B-Instruct-q4f16_1-MLC`
+
+Why this model:
+- small enough for relatively fast first load
+- good enough for plain-English explanation tasks
+- runs fully in the browser with WebGPU
+
+Notes:
+- first use can still take time because the model downloads locally
+- after first load, the browser caches it for reuse
+- the AI helper is for explanation only, **not legal advice**
+
+### About pre-bundling the model
+In theory, model assets could be self-hosted as static files, but for a GitHub Pages deployment this is usually not practical because the model files are large.
+
+This implementation instead relies on browser-side caching after first load, which is the most practical static-site approach.
 
 ## Important GitHub Pages note
 Because this is a static app:

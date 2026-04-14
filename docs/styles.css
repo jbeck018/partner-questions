@@ -375,6 +375,59 @@ a { color: inherit; }
   font-size: 14px;
 }
 
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.text-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.text-action:hover {
+  color: var(--primary-2);
+}
+
+.ai-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ai-panel {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(72, 104, 71, 0.12);
+  background: rgba(244, 241, 232, 0.7);
+}
+
+.ai-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ai-panel-body {
+  white-space: pre-wrap;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
 .fields-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
