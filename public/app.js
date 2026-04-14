@@ -117,6 +117,32 @@ function getProgress() {
   };
 }
 
+function getSectionProgress(section) {
+  const visibleQuestions = section.questions.filter((question) => isVisible(question.showWhen));
+  const complete = visibleQuestions.filter((question) => isQuestionComplete(question)).length;
+  const total = visibleQuestions.length;
+  return {
+    complete,
+    total,
+    percent: total ? Math.round((complete / total) * 100) : 0
+  };
+}
+
+function getQuestionHelp(question) {
+  const visibleFields = getVisibleFields(question);
+  if (!visibleFields.length) return '';
+  if (questionHasRepeatedRows(visibleFields)) {
+    return 'For repeated partner rows, complete at least one full row. Leave unused rows fully blank.';
+  }
+  if (visibleFields.some((field) => field.type === 'radio')) {
+    return 'Choose the response that best matches your agreement.';
+  }
+  if (visibleFields.some((field) => field.type === 'textarea')) {
+    return 'Use concise language so the final export is easy to compare.';
+  }
+  return '';
+}
+
 function createInput(field) {
   const wrapper = document.createElement('div');
   wrapper.className = field.type === 'textarea' ? 'field-full' : 'field';
@@ -192,7 +218,17 @@ function render() {
 
     const navLink = document.createElement('a');
     navLink.href = `#${section.id}`;
-    navLink.textContent = section.title;
+    const sectionProgress = getSectionProgress(section);
+    navLink.innerHTML = `
+      <div class="section-link-top">
+        <strong>${section.title}</strong>
+        <span class="section-count">${sectionProgress.complete}/${sectionProgress.total}</span>
+      </div>
+      <div class="section-link-bottom">
+        <div class="section-mini-track"><div class="section-mini-fill" style="width:${sectionProgress.percent}%"></div></div>
+        <span class="section-percent">${sectionProgress.percent}%</span>
+      </div>
+    `;
     sectionNav.appendChild(navLink);
 
     const block = document.createElement('section');
@@ -226,11 +262,19 @@ function render() {
       title.className = 'question-title';
       title.textContent = question.prompt;
 
+      const help = document.createElement('p');
+      help.className = 'question-help';
+      help.textContent = getQuestionHelp(question);
+
       const fieldsGrid = document.createElement('div');
       fieldsGrid.className = 'fields-grid';
       question.fields.forEach((field) => fieldsGrid.appendChild(createInput(field)));
 
-      card.append(meta, title, fieldsGrid);
+      if (help.textContent) {
+        card.append(meta, title, help, fieldsGrid);
+      } else {
+        card.append(meta, title, fieldsGrid);
+      }
       block.appendChild(card);
     });
 
