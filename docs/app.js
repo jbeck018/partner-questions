@@ -1,6 +1,6 @@
 import { FORM_SCHEMA } from './schema-data.js';
 
-const STORAGE_KEY = 'partnership-worksheet-answers-v1';
+const STORAGE_KEY = 'partnership-worksheet-answers-v2';
 
 const app = document.getElementById('app');
 const sectionNav = document.getElementById('sectionNav');
@@ -8,6 +8,10 @@ const saveStatus = document.getElementById('saveStatus');
 const progressCount = document.getElementById('progressCount');
 const progressFill = document.getElementById('progressFill');
 const progressNote = document.getElementById('progressNote');
+const currentSectionTitle = document.getElementById('currentSectionTitle');
+const currentSectionSummary = document.getElementById('currentSectionSummary');
+const prevSectionButton = document.getElementById('prevSectionButton');
+const nextSectionButton = document.getElementById('nextSectionButton');
 const completionPanel = document.getElementById('completionPanel');
 const exportCsvButton = document.getElementById('exportCsvButton');
 const exportJsonButton = document.getElementById('exportJsonButton');
@@ -17,7 +21,8 @@ const clearDataButton = document.getElementById('clearDataButton');
 const state = {
   schema: FORM_SCHEMA,
   answers: {},
-  timers: new Map()
+  timers: new Map(),
+  currentSectionIndex: 0
 };
 
 function setStatus(message, className = '') {
@@ -57,12 +62,8 @@ function affectsVisibility(changedKey) {
   );
 }
 
-function getVisibleQuestions() {
-  return state.schema.flatMap((section) =>
-    section.questions
-      .filter((question) => isVisible(question.showWhen))
-      .map((question) => ({ section, question }))
-  );
+function getVisibleQuestions(section) {
+  return section.questions.filter((question) => isVisible(question.showWhen));
 }
 
 function getVisibleFields(question) {
@@ -84,9 +85,30 @@ function groupFieldsByRow(fields) {
   return [...groups.values()];
 }
 
+function getExpectedSignerRows() {
+  const partnerNameKeys = ['a1_partner_1_name', 'a1_partner_2_name', 'a1_partner_3_name'];
+  const count = partnerNameKeys.filter((key) => hasValue(state.answers[key])).length;
+  return Math.max(1, count || 0);
+}
+
 function isQuestionComplete(question) {
   const visibleFields = getVisibleFields(question);
   if (!visibleFields.length) return true;
+
+  if (question.id === 'd2') {
+    const expectedRows = getExpectedSignerRows();
+    const rowGroups = groupFieldsByRow(visibleFields).filter((group) => group[0]?.key.includes('partner_'));
+    let completeRows = 0;
+
+    for (const rowFields of rowGroups) {
+      const answeredCount = rowFields.filter((field) => hasValue(state.answers[field.key])).length;
+      if (answeredCount === 0) continue;
+      if (answeredCount !== rowFields.length) return false;
+      completeRows += 1;
+    }
+
+    return completeRows >= expectedRows;
+  }
 
   if (questionHasRepeatedRows(visibleFields)) {
     const rowGroups = groupFieldsByRow(visibleFields);
@@ -105,8 +127,14 @@ function isQuestionComplete(question) {
   return visibleFields.every((field) => hasValue(state.answers[field.key]));
 }
 
+function getAllVisibleQuestions() {
+  return state.schema.flatMap((section) =>
+    getVisibleQuestions(section).map((question) => ({ section, question }))
+  );
+}
+
 function getProgress() {
-  const visibleQuestions = getVisibleQuestions();
+  const visibleQuestions = getAllVisibleQuestions();
   const complete = visibleQuestions.filter(({ question }) => isQuestionComplete(question)).length;
   const total = visibleQuestions.length;
   return {
@@ -118,29 +146,43 @@ function getProgress() {
 }
 
 function getSectionProgress(section) {
-  const visibleQuestions = section.questions.filter((question) => isVisible(question.showWhen));
+  const visibleQuestions = getVisibleQuestions(section);
   const complete = visibleQuestions.filter((question) => isQuestionComplete(question)).length;
   const total = visibleQuestions.length;
   return {
     complete,
     total,
-    percent: total ? Math.round((complete / total) * 100) : 0
+    percent: total ? Math.round((complete / total) * 100) : 0,
+    allComplete: total > 0 && complete === total
   };
 }
 
 function getQuestionHelp(question) {
   const visibleFields = getVisibleFields(question);
   if (!visibleFields.length) return '';
+  if (question.id === 'd2') {
+    return `Complete signatures for the partners you listed earlier. Currently expecting ${getExpectedSignerRows()} completed signer row${getExpectedSignerRows() === 1 ? '' : 's'}.`;
+  }
   if (questionHasRepeatedRows(visibleFields)) {
-    return 'For repeated partner rows, complete at least one full row. Leave unused rows fully blank.';
+    return 'Complete at least one full row. Leave unused rows entirely blank.';
   }
   if (visibleFields.some((field) => field.type === 'radio')) {
-    return 'Choose the response that best matches your agreement.';
+    return 'Choose the response that best reflects your agreement.';
   }
   if (visibleFields.some((field) => field.type === 'textarea')) {
-    return 'Use concise language so the final export is easy to compare.';
+    return 'Keep the response concise so exports stay easy to compare.';
   }
   return '';
+}
+
+function getSectionDescription(section) {
+  const descriptions = {
+    'section-a': 'Define the initial structure of the partnership: ownership, contributions, and financing expectations.',
+    'section-b': 'Clarify management, authority, compensation, and operational expectations for each partner.',
+    'section-c': 'Plan for change, conflict, exit, death, disability, and buyout procedures before they happen.',
+    'section-d': 'Capture any final considerations, signatures, and witness details.'
+  };
+  return descriptions[section.id] || 'Complete each question in this section before moving on.';
 }
 
 function createInput(field) {
@@ -206,18 +248,25 @@ function updateProgressUi() {
     ? 'All visible questions are complete.'
     : `${progress.total - progress.complete} questions remaining.`;
   completionPanel.classList.toggle('hidden', !progress.allComplete);
+
+  const currentSection = state.schema[state.currentSectionIndex];
+  const sectionProgress = getSectionProgress(currentSection);
+  currentSectionTitle.textContent = currentSection.title;
+  currentSectionSummary.textContent = `${sectionProgress.complete} of ${sectionProgress.total} questions completed in this section. ${getSectionDescription(currentSection)}`;
+
+  prevSectionButton.disabled = state.currentSectionIndex === 0;
+  nextSectionButton.disabled = state.currentSectionIndex === state.schema.length - 1;
+  nextSectionButton.textContent = state.currentSectionIndex === state.schema.length - 1 ? 'Last section' : 'Next section';
 }
 
-function render() {
-  app.innerHTML = '';
+function renderSectionNav() {
   sectionNav.innerHTML = '';
 
-  state.schema.forEach((section) => {
-    const visibleQuestions = section.questions.filter((question) => isVisible(question.showWhen));
-    if (!visibleQuestions.length) return;
-
+  state.schema.forEach((section, index) => {
     const navLink = document.createElement('a');
     navLink.href = `#${section.id}`;
+    if (index === state.currentSectionIndex) navLink.classList.add('active');
+
     const sectionProgress = getSectionProgress(section);
     navLink.innerHTML = `
       <div class="section-link-top">
@@ -229,67 +278,114 @@ function render() {
         <span class="section-percent">${sectionProgress.percent}%</span>
       </div>
     `;
-    sectionNav.appendChild(navLink);
 
-    const block = document.createElement('section');
-    block.className = 'section-block';
-    block.id = section.id;
-
-    const header = document.createElement('div');
-    header.className = 'section-header';
-    header.innerHTML = `<h2>${section.title}</h2><p>${visibleQuestions.length} question${visibleQuestions.length === 1 ? '' : 's'} in this section</p>`;
-    block.appendChild(header);
-
-    visibleQuestions.forEach((question) => {
-      const card = document.createElement('article');
-      card.className = 'question-card';
-
-      const meta = document.createElement('div');
-      meta.className = 'question-meta';
-
-      const label = document.createElement('div');
-      label.className = 'question-label';
-      label.textContent = question.number;
-
-      const badge = document.createElement('div');
-      const complete = isQuestionComplete(question);
-      badge.className = `question-badge${complete ? ' complete' : ''}`;
-      badge.textContent = complete ? 'Complete' : 'In progress';
-
-      meta.append(label, badge);
-
-      const title = document.createElement('h3');
-      title.className = 'question-title';
-      title.textContent = question.prompt;
-
-      const help = document.createElement('p');
-      help.className = 'question-help';
-      help.textContent = getQuestionHelp(question);
-
-      const fieldsGrid = document.createElement('div');
-      fieldsGrid.className = 'fields-grid';
-      question.fields.forEach((field) => fieldsGrid.appendChild(createInput(field)));
-
-      if (help.textContent) {
-        card.append(meta, title, help, fieldsGrid);
-      } else {
-        card.append(meta, title, fieldsGrid);
-      }
-      block.appendChild(card);
+    navLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      state.currentSectionIndex = index;
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    app.appendChild(block);
+    sectionNav.appendChild(navLink);
+  });
+}
+
+function renderCurrentSection() {
+  app.innerHTML = '';
+  const section = state.schema[state.currentSectionIndex];
+  const visibleQuestions = getVisibleQuestions(section);
+
+  const stage = document.createElement('section');
+  stage.className = 'section-stage';
+  stage.id = section.id;
+
+  const heading = document.createElement('div');
+  heading.className = 'section-heading';
+  heading.innerHTML = `
+    <div class="section-kicker">Now reviewing</div>
+    <h2 class="section-title">${section.title}</h2>
+    <p class="section-description">${getSectionDescription(section)}</p>
+  `;
+  stage.appendChild(heading);
+
+  const questionList = document.createElement('div');
+  questionList.className = 'question-list';
+
+  visibleQuestions.forEach((question) => {
+    const card = document.createElement('article');
+    card.className = 'question-card';
+
+    const meta = document.createElement('div');
+    meta.className = 'question-meta';
+
+    const label = document.createElement('div');
+    label.className = 'question-label';
+    label.textContent = question.number;
+
+    const badge = document.createElement('div');
+    const complete = isQuestionComplete(question);
+    badge.className = `question-badge${complete ? ' complete' : ''}`;
+    badge.textContent = complete ? 'Complete' : 'Needs attention';
+
+    meta.append(label, badge);
+
+    const title = document.createElement('h3');
+    title.className = 'question-title';
+    title.textContent = question.prompt;
+
+    const helpText = getQuestionHelp(question);
+    const help = document.createElement('p');
+    help.className = 'question-help';
+    help.textContent = helpText;
+
+    const fieldsGrid = document.createElement('div');
+    fieldsGrid.className = 'fields-grid';
+    question.fields.forEach((field) => fieldsGrid.appendChild(createInput(field)));
+
+    card.append(meta, title);
+    if (helpText) card.appendChild(help);
+    card.appendChild(fieldsGrid);
+    questionList.appendChild(card);
   });
 
+  stage.appendChild(questionList);
+
+  const footer = document.createElement('div');
+  footer.className = 'section-footer';
+  footer.innerHTML = `<p class="note">Finish this section, then move to the next one when you’re ready.</p>`;
+
+  const actions = document.createElement('div');
+  actions.className = 'section-controls';
+  const prevClone = prevSectionButton.cloneNode(true);
+  const nextClone = nextSectionButton.cloneNode(true);
+  prevClone.id = 'prevSectionButtonInline';
+  nextClone.id = 'nextSectionButtonInline';
+  prevClone.disabled = state.currentSectionIndex === 0;
+  nextClone.disabled = state.currentSectionIndex === state.schema.length - 1;
+  nextClone.textContent = state.currentSectionIndex === state.schema.length - 1 ? 'Last section' : 'Next section';
+  prevClone.addEventListener('click', goToPreviousSection);
+  nextClone.addEventListener('click', goToNextSection);
+  actions.append(prevClone, nextClone);
+  footer.appendChild(actions);
+  stage.appendChild(footer);
+
+  app.appendChild(stage);
+}
+
+function render() {
+  renderSectionNav();
+  renderCurrentSection();
   updateProgressUi();
 }
 
 function queueSave(key, value) {
   state.answers[key] = value;
-  if (affectsVisibility(key)) {
+  if (affectsVisibility(key) || key.startsWith('a1_partner_') || key.startsWith('d2_partner_')) {
     render();
   } else {
     updateProgressUi();
+    renderSectionNav();
+    renderCurrentSection();
   }
   setStatus('Saving…', 'saving');
 
@@ -401,18 +497,34 @@ function clearSavedData() {
   setStatus('Saved data cleared', 'saved');
 }
 
+function goToPreviousSection() {
+  if (state.currentSectionIndex === 0) return;
+  state.currentSectionIndex -= 1;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goToNextSection() {
+  if (state.currentSectionIndex >= state.schema.length - 1) return;
+  state.currentSectionIndex += 1;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function bindActions() {
   exportCsvButton.addEventListener('click', exportCsv);
   exportJsonButton.addEventListener('click', exportJson);
   importJsonInput.addEventListener('change', (event) => importJsonFile(event.target.files?.[0]));
   clearDataButton.addEventListener('click', clearSavedData);
+  prevSectionButton.addEventListener('click', goToPreviousSection);
+  nextSectionButton.addEventListener('click', goToNextSection);
 }
 
 function init() {
   setStatus('Loading…');
   state.answers = loadAnswers();
-  render();
   bindActions();
+  render();
   setStatus('Ready');
 }
 

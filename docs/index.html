@@ -4,90 +4,95 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Partnership Worksheet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600;6..72,700&family=Familjen+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="page-shell">
-      <header class="hero card">
+      <header class="hero">
         <div class="hero-copy">
           <span class="eyebrow">Partnership planning worksheet</span>
-          <h1>Partnership Worksheet</h1>
+          <h1>Build the agreement details, one section at a time.</h1>
           <p>
-            Review every prompt from the worksheet in a cleaner format, save as you go,
-            and export structured results only when the form is complete.
+            A calmer, step-by-step version of the partnership worksheet. Move section by section,
+            autosave locally, and export structured CSV or JSON only after completion.
           </p>
           <div class="hero-points">
             <div class="hero-point">
-              <strong>1</strong>
-              <span>Answer each question card in order.</span>
+              <strong>01</strong>
+              <span>Answer the current section without getting overwhelmed.</span>
             </div>
             <div class="hero-point">
-              <strong>2</strong>
-              <span>Your progress autosaves in this browser.</span>
+              <strong>02</strong>
+              <span>Grouped rows allow only fully completed entries.</span>
             </div>
             <div class="hero-point">
-              <strong>3</strong>
-              <span>Export CSV or JSON after everything is finished.</span>
+              <strong>03</strong>
+              <span>Export clean machine-readable data at the end.</span>
             </div>
           </div>
         </div>
-        <div class="hero-status">
-          <div class="stat-card">
-            <span class="stat-label">Progress</span>
-            <strong id="progressCount">0 / 0 questions</strong>
-            <div class="progress-track">
-              <div class="progress-fill" id="progressFill"></div>
-            </div>
-            <span class="stat-note" id="progressNote">Start with Section A.</span>
+        <div class="stat-card">
+          <span class="stat-label">Overall progress</span>
+          <strong id="progressCount">0 / 0 questions</strong>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
           </div>
+          <span class="stat-note" id="progressNote">Start with Section A.</span>
         </div>
       </header>
 
       <main class="layout">
-        <aside class="sidebar card">
-          <div class="sidebar-block">
-            <h2>Sections</h2>
-            <nav id="sectionNav"></nav>
-          </div>
-
-          <div class="sidebar-block">
-            <h3>Status</h3>
-            <div class="status-row">
-              <span>Autosave</span>
-              <strong id="saveStatus">Ready</strong>
+        <aside class="sidebar">
+          <div class="sidebar-panel">
+            <div class="sidebar-block">
+              <h2>Sections</h2>
+              <nav id="sectionNav"></nav>
             </div>
-            <p class="note small">
-              Data stays only in this browser on this device.
-            </p>
-          </div>
 
-          <div class="sidebar-block">
-            <h3>Utilities</h3>
-            <div class="stack-actions">
-              <label class="button secondary file-button" for="importJsonInput">Import JSON backup</label>
-              <input id="importJsonInput" type="file" accept="application/json" hidden />
-              <button class="button ghost" id="clearDataButton" type="button">Clear saved data</button>
+            <div class="sidebar-block">
+              <h3>Status</h3>
+              <div class="status-row">
+                <span>Autosave</span>
+                <strong id="saveStatus">Ready</strong>
+              </div>
+              <p class="note small">Data stays only in this browser on this device.</p>
+            </div>
+
+            <div class="sidebar-block">
+              <h3>Utilities</h3>
+              <div class="stack-actions">
+                <label class="button secondary file-button" for="importJsonInput">Import JSON backup</label>
+                <input id="importJsonInput" type="file" accept="application/json" hidden />
+                <button class="button ghost" id="clearDataButton" type="button">Clear saved data</button>
+              </div>
             </div>
           </div>
         </aside>
 
         <section class="content">
-          <div class="intro card">
-            <h2>Question-by-question review</h2>
-            <p>
-              Each prompt is shown as a separate card below. For grouped rows like partner entries,
-              complete at least one full row and leave unused rows blank.
-            </p>
+          <div class="intro">
+            <div>
+              <span class="eyebrow subtle">Current section</span>
+              <h2 id="currentSectionTitle">Section</h2>
+              <p id="currentSectionSummary">Use the navigation or continue step by step.</p>
+            </div>
+            <div class="section-controls">
+              <button class="button secondary" id="prevSectionButton" type="button">Previous section</button>
+              <button class="button" id="nextSectionButton" type="button">Next section</button>
+            </div>
           </div>
 
           <div id="app"></div>
 
-          <section class="completion card hidden" id="completionPanel">
+          <section class="completion hidden" id="completionPanel">
             <div>
-              <span class="eyebrow">Ready to export</span>
+              <span class="eyebrow subtle">Ready to export</span>
               <h2>Worksheet complete</h2>
               <p>
-                You’ve completed all visible questions. Export a CSV for comparison or JSON for backup/import.
+                Everything visible is complete. Export CSV for comparison or JSON for backup/import.
               </p>
             </div>
             <div class="completion-actions">
