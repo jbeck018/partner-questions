@@ -3,13 +3,16 @@ import { buildCsv, flattenFields } from './export-utils.js';
 
 const STORAGE_KEY = 'partnership-worksheet-answers-v2';
 const AI_MODEL = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
-const AI_SYSTEM_PROMPT = `You are a plain-language business worksheet explainer.
-Explain what a partnership worksheet question means in simple terms.
-Do not give legal advice.
-Do not pretend to know the user's business.
-Be concise, practical, and easy to scan.
-When helpful, use short bullets.
-Never answer as if a single choice is universally correct.`;
+const AI_SYSTEM_PROMPT = `You are a plain-language assistant for a partnership agreement worksheet.
+Your job is to help business owners understand what each question is asking and what they should think through before answering.
+Stay focused on the worksheet question, the visible fields, and any user-provided context.
+Do not give legal, tax, or financial advice.
+Do not pretend to know facts that were not provided.
+Do not present one option as universally correct.
+Be practical, specific, and easy to scan.
+Return plain text only.
+Do not use markdown, asterisks, tables, or JSON.
+Prefer short paragraphs and bullets with clear labels.`;
 
 const app = document.getElementById('app');
 const sectionNav = document.getElementById('sectionNav');
@@ -243,18 +246,120 @@ function formatAiProgress(progress) {
   return 'Preparing local AI helper…';
 }
 
+function appendAiFormattedText(container, content) {
+  container.textContent = '';
+
+  const normalized = String(content || '').replace(/\r/g, '').trim();
+  if (!normalized) return;
+
+  const blocks = normalized.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+
+  const appendLines = (target, lines) => {
+    if (!lines.length) return;
+
+    if (lines.every((line) => /^[-•]\s+/.test(line))) {
+      const list = document.createElement('ul');
+      list.className = 'ai-rich-list';
+      lines.forEach((line) => {
+        const item = document.createElement('li');
+        item.textContent = line.replace(/^[-•]\s+/, '').trim();
+        list.appendChild(item);
+      });
+      target.appendChild(list);
+      return;
+    }
+
+    if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+      const list = document.createElement('ol');
+      list.className = 'ai-rich-list';
+      lines.forEach((line) => {
+        const item = document.createElement('li');
+        item.textContent = line.replace(/^\d+\.\s+/, '').trim();
+        list.appendChild(item);
+      });
+      target.appendChild(list);
+      return;
+    }
+
+    const paragraph = document.createElement('p');
+    paragraph.className = 'ai-rich-paragraph';
+    paragraph.textContent = lines.join(' ');
+    target.appendChild(paragraph);
+  };
+
+  blocks.forEach((block) => {
+    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (!lines.length) return;
+
+    const sectionMatch = lines[0].match(/^([A-Za-z][A-Za-z /-]{1,40}):$/);
+    if (sectionMatch) {
+      const section = document.createElement('section');
+      section.className = 'ai-rich-section';
+
+      const heading = document.createElement('div');
+      heading.className = 'ai-rich-heading';
+      heading.textContent = sectionMatch[1];
+      section.appendChild(heading);
+
+      appendLines(section, lines.slice(1));
+      container.appendChild(section);
+      return;
+    }
+
+    appendLines(container, lines);
+  });
+}
+
 function buildAiPrompt(question, mode) {
   const visibleFields = getVisibleFields(question)
     .map((field) => `- ${field.label}${hasValue(state.answers[field.key]) ? `: ${state.answers[field.key]}` : ''}`)
     .join('\n');
 
+  const sectionTitle = state.schema[state.currentSectionIndex].title;
+  const sectionDescription = getSectionDescription(state.schema[state.currentSectionIndex]);
+
   const intents = {
-    explain: 'Explain what this question means in plain English and why it matters.',
-    example: 'Give a short example of the kind of answer a partnership might write here. Make it clear this is only an example, not advice.',
-    discuss: 'List 3 short discussion points the partners should align on before answering.'
+    explain: `Task: Help the user understand the question.
+
+Output format:
+Meaning:
+Write 2-4 sentences in plain English explaining what the question is really asking. Do not repeat the question word-for-word.
+
+Why it matters:
+- Give 2-3 concrete bullets about why this affects the partnership.
+
+What to decide:
+- Give 2-4 bullets listing the practical choices or tradeoffs the partners should discuss.
+
+End with: Not legal advice.`,
+    example: `Task: Give a realistic sample response the partners could use as a starting point.
+
+Output format:
+Example answer:
+Write a short sample answer tailored to this kind of partnership worksheet item.
+
+Why this example works:
+- Give 2-3 bullets explaining what decisions the example is showing.
+
+Adjust for your business:
+- Give 2-3 bullets describing what the partners should customize before using anything similar.
+
+End with: Not legal advice.`,
+    discuss: `Task: Help the partners have a better conversation before answering.
+
+Output format:
+Discussion points:
+1. Give a concrete discussion question.
+2. Give a concrete discussion question.
+3. Give a concrete discussion question.
+
+Watch-outs:
+- Give 2-3 bullets about common misunderstandings, risks, or edge cases to clarify.
+
+End with: Not legal advice.`
   };
 
-  return `Section: ${state.schema[state.currentSectionIndex].title}\nQuestion: ${question.number} — ${question.prompt}\nVisible fields:\n${visibleFields || '- No visible fields'}\n\nTask: ${intents[mode]}\n\nRequirements:\n- Keep the response under 160 words.\n- Use clear, non-legal language.\n- Add a final line: \"Not legal advice.\"`;
+  return `Section: ${sectionTitle}\nSection purpose: ${sectionDescription}\nQuestion: ${question.number} — ${question.prompt}\nVisible fields and current answers:\n${visibleFields || '- No visible fields'}\n\nInstructions:\n- Be specific to partnership agreements and owner decision-making.\n- If the visible fields suggest a yes/no decision, explain both sides without assuming the answer.\n- If details are missing, say what the partners should clarify instead of making up facts.\n- Keep the response rich but compact, ideally 180-240 words.\n- Use plain text only, with the exact labels requested below.\n\n${intents[mode]}`;
 }
 
 async function ensureAiEngine() {
@@ -310,8 +415,8 @@ async function requestAiHelp(question, mode, { force = false } = {}) {
         { role: 'system', content: AI_SYSTEM_PROMPT },
         { role: 'user', content: buildAiPrompt(question, mode) }
       ],
-      temperature: 0.2,
-      max_tokens: 220
+      temperature: 0.3,
+      max_tokens: 320
     });
 
     const content = stringifyAiContent(reply.choices?.[0]?.message?.content);
@@ -352,10 +457,10 @@ async function askAiFollowUp(question) {
           { role: 'user', content: item.question },
           { role: 'assistant', content: item.answer }
         ])),
-        { role: 'user', content: `Follow-up question: ${draft}\nAnswer briefly and clearly. Not legal advice.` }
+        { role: 'user', content: `Follow-up question: ${draft}\nAnswer briefly but use concrete detail. Use plain text only with no markdown. If the answer depends on missing facts, say what should be clarified. End with: Not legal advice.` }
       ],
-      temperature: 0.2,
-      max_tokens: 220
+      temperature: 0.3,
+      max_tokens: 260
     });
 
     const answer = stringifyAiContent(reply.choices?.[0]?.message?.content);
@@ -616,7 +721,12 @@ function renderCurrentSection() {
       aiPanelHeader.className = 'ai-panel-header';
 
       const leftHeader = document.createElement('div');
-      leftHeader.innerHTML = `<strong>AI help</strong><span class="review-count">${state.ai.mode}</span>`;
+      const leftHeaderTitle = document.createElement('strong');
+      leftHeaderTitle.textContent = 'AI help';
+      const leftHeaderMode = document.createElement('span');
+      leftHeaderMode.className = 'review-count';
+      leftHeaderMode.textContent = state.ai.mode;
+      leftHeader.append(leftHeaderTitle, leftHeaderMode);
 
       const headerActions = document.createElement('div');
       headerActions.className = 'ai-panel-actions';
@@ -659,7 +769,7 @@ function renderCurrentSection() {
         aiBody.textContent = state.ai.error;
         aiBody.classList.add('error-text');
       } else if (response) {
-        aiBody.textContent = response;
+        appendAiFormattedText(aiBody, response);
       } else {
         aiBody.textContent = 'Choose an AI help option above. First use may take a minute while the local model downloads and is cached.';
       }
@@ -672,7 +782,23 @@ function renderCurrentSection() {
         followUps.forEach((item) => {
           const block = document.createElement('div');
           block.className = 'followup-item';
-          block.innerHTML = `<div class="followup-q"><strong>You asked:</strong> ${item.question}</div><div class="followup-a"><strong>AI:</strong> ${item.answer}</div>`;
+
+          const questionBlock = document.createElement('div');
+          questionBlock.className = 'followup-q';
+          const questionLabel = document.createElement('strong');
+          questionLabel.textContent = 'You asked:';
+          const questionText = document.createElement('span');
+          questionText.textContent = ` ${item.question}`;
+          questionBlock.append(questionLabel, questionText);
+
+          const answerBlock = document.createElement('div');
+          answerBlock.className = 'followup-a';
+          const answerLabel = document.createElement('strong');
+          answerLabel.textContent = 'AI:';
+          answerBlock.appendChild(answerLabel);
+          appendAiFormattedText(answerBlock, item.answer);
+
+          block.append(questionBlock, answerBlock);
           followUpList.appendChild(block);
         });
         aiPanel.appendChild(followUpList);
