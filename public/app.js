@@ -88,9 +88,20 @@ function groupFieldsByRow(fields) {
 }
 
 function getExpectedSignerRows() {
-  const partnerNameKeys = ['a1_partner_1_name', 'a1_partner_2_name', 'a1_partner_3_name'];
-  const count = partnerNameKeys.filter((key) => hasValue(state.answers[key])).length;
-  return Math.max(1, count || 0);
+  const candidateKeys = [
+    'a1_partner_1_name', 'a1_partner_2_name', 'a1_partner_3_name',
+    'a5_partner_1_name', 'a5_partner_2_name', 'a5_partner_3_name',
+    'b1a_i_partner_1_name', 'b1a_i_partner_2_name', 'b1a_i_partner_3_name',
+    'b1a_ii_partner_1_name', 'b1a_ii_partner_2_name', 'b1a_ii_partner_3_name',
+    'b12_partner_1_name', 'b12_partner_2_name', 'b12_partner_3_name',
+    'd2_partner_1_name', 'd2_partner_2_name', 'd2_partner_3_name'
+  ];
+  const uniqueNames = new Set(
+    candidateKeys
+      .map((key) => String(state.answers[key] ?? '').trim())
+      .filter(Boolean)
+  );
+  return Math.max(1, uniqueNames.size || 0);
 }
 
 function isQuestionComplete(question) {
@@ -164,6 +175,15 @@ function getQuestionHelp(question) {
   if (!visibleFields.length) return '';
   if (question.id === 'd2') {
     return `Complete signatures for the partners you listed earlier. Currently expecting ${getExpectedSignerRows()} completed signer row${getExpectedSignerRows() === 1 ? '' : 's'}.`;
+  }
+  if (question.id === 'a1') {
+    return 'If nobody is contributing initial capital, choose No and continue. If Yes, complete at least one full row.';
+  }
+  if (question.id === 'b1a_ii') {
+    return 'If there is no cap on additional contributions, choose No and continue.';
+  }
+  if (question.id === 'b12') {
+    return 'If no partner receives a salary, choose No and continue. If Yes, complete at least one full row.';
   }
   if (questionHasRepeatedRows(visibleFields)) {
     return 'Complete at least one full row. Leave unused rows entirely blank.';

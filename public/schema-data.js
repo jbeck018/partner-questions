@@ -7,11 +7,14 @@ export const FORM_SCHEMA = [
         id: 'a1',
         number: 'A1',
         prompt: 'What will be the initial capital contributions of the partners?',
-        fields: [1, 2, 3].flatMap((i) => ([
-          { key: `a1_partner_${i}_name`, label: `Partner ${i} name`, type: 'text' },
-          { key: `a1_partner_${i}_amount`, label: `Partner ${i} contribution amount`, type: 'currency' },
-          { key: `a1_partner_${i}_ownership`, label: `Partner ${i} ownership %`, type: 'number', step: '0.01' },
-        ]))
+        fields: [
+          { key: 'a1_has_initial_capital_contributions', label: 'Will any partner make an initial capital contribution?', type: 'radio', options: ['Yes', 'No'] },
+          ...[1, 2, 3].flatMap((i) => ([
+            { key: `a1_partner_${i}_name`, label: `Partner ${i} name`, type: 'text', showWhen: { key: 'a1_has_initial_capital_contributions', equals: 'Yes' } },
+            { key: `a1_partner_${i}_amount`, label: `Partner ${i} contribution amount`, type: 'currency', showWhen: { key: 'a1_has_initial_capital_contributions', equals: 'Yes' } },
+            { key: `a1_partner_${i}_ownership`, label: `Partner ${i} ownership %`, type: 'number', step: '0.01', showWhen: { key: 'a1_has_initial_capital_contributions', equals: 'Yes' } },
+          ]))
+        ]
       },
       {
         id: 'a2',
@@ -75,10 +78,13 @@ export const FORM_SCHEMA = [
         number: 'B1a.ii',
         prompt: 'If yes, is it subject to a cap?',
         showWhen: { key: 'b1a_additional_capital_required', equals: 'Yes' },
-        fields: [1, 2, 3].flatMap((i) => ([
-          { key: `b1a_ii_partner_${i}_name`, label: `Partner ${i} name`, type: 'text' },
-          { key: `b1a_ii_partner_${i}_cap_amount`, label: `Partner ${i} cap amount`, type: 'currency' },
-        ]))
+        fields: [
+          { key: 'b1a_ii_has_cap', label: 'Is there a cap?', type: 'radio', options: ['Yes', 'No'] },
+          ...[1, 2, 3].flatMap((i) => ([
+            { key: `b1a_ii_partner_${i}_name`, label: `Partner ${i} name`, type: 'text', showWhen: { key: 'b1a_ii_has_cap', equals: 'Yes' } },
+            { key: `b1a_ii_partner_${i}_cap_amount`, label: `Partner ${i} cap amount`, type: 'currency', showWhen: { key: 'b1a_ii_has_cap', equals: 'Yes' } },
+          ]))
+        ]
       },
       {
         id: 'b1b',
@@ -204,11 +210,14 @@ export const FORM_SCHEMA = [
         id: 'b12',
         number: 'B12',
         prompt: 'Is any partner entitled to a salary?',
-        fields: [1, 2, 3].flatMap((i) => ([
-          { key: `b12_partner_${i}_name`, label: `Partner ${i} name`, type: 'text' },
-          { key: `b12_partner_${i}_salary_amount`, label: `Partner ${i} salary amount`, type: 'currency' },
-          { key: `b12_partner_${i}_salary_period`, label: `Partner ${i} salary period`, type: 'text', placeholder: 'month, year, week...' },
-        ]))
+        fields: [
+          { key: 'b12_has_partner_salary', label: 'Answer', type: 'radio', options: ['Yes', 'No'] },
+          ...[1, 2, 3].flatMap((i) => ([
+            { key: `b12_partner_${i}_name`, label: `Partner ${i} name`, type: 'text', showWhen: { key: 'b12_has_partner_salary', equals: 'Yes' } },
+            { key: `b12_partner_${i}_salary_amount`, label: `Partner ${i} salary amount`, type: 'currency', showWhen: { key: 'b12_has_partner_salary', equals: 'Yes' } },
+            { key: `b12_partner_${i}_salary_period`, label: `Partner ${i} salary period`, type: 'text', placeholder: 'month, year, week...', showWhen: { key: 'b12_has_partner_salary', equals: 'Yes' } },
+          ]))
+        ]
       },
       {
         id: 'b13',
