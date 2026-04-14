@@ -3,52 +3,88 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Partnership Worksheet Form</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <title>Partnership Worksheet</title>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <h1>Partnership Worksheet</h1>
-        <p>Simple autosaving form based on the PDF.</p>
-      </div>
-      <div class="actions">
-        <button class="button secondary" id="exportCsvButton" type="button">Export CSV</button>
-        <button class="button secondary" id="exportJsonButton" type="button">Export JSON</button>
-        <label class="button secondary file-button" for="importJsonInput">Import JSON</label>
-        <input id="importJsonInput" type="file" accept="application/json" hidden />
-        <button class="button secondary" id="clearDataButton" type="button">Clear saved data</button>
-      </div>
-    </header>
-
-    <main class="layout">
-      <aside class="sidebar">
-        <h2>Sections</h2>
-        <nav id="sectionNav"></nav>
-        <div class="note">
-          <strong>Autosave:</strong>
-          <span id="saveStatus">Ready</span>
-        </div>
-        <div class="note small">
-          Data is saved only in this browser on this device. No backend is required.
-        </div>
-        <div class="note small">
-          Export CSV or JSON anytime so responses can be compared or processed easily.
-        </div>
-      </aside>
-
-      <section class="content">
-        <div class="intro card">
-          <h2>Question-by-question review</h2>
+    <div class="page-shell">
+      <header class="hero card">
+        <div class="hero-copy">
+          <span class="eyebrow">Partnership planning worksheet</span>
+          <h1>Partnership Worksheet</h1>
           <p>
-            Every prompt from the worksheet is listed below as its own card to make review easy.
-            Change any field and it will autosave.
+            Work through every question from the PDF in a clean, guided format.
+            Your answers autosave in this browser as you go.
           </p>
         </div>
-        <div id="app"></div>
-      </section>
-    </main>
+        <div class="hero-status">
+          <div class="stat-card">
+            <span class="stat-label">Progress</span>
+            <strong id="progressCount">0 / 0 questions</strong>
+            <div class="progress-track">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <span class="stat-note" id="progressNote">Start with Section A.</span>
+          </div>
+        </div>
+      </header>
 
-    <script type="module" src="/app.js"></script>
+      <main class="layout">
+        <aside class="sidebar card">
+          <div class="sidebar-block">
+            <h2>Sections</h2>
+            <nav id="sectionNav"></nav>
+          </div>
+
+          <div class="sidebar-block">
+            <h3>Status</h3>
+            <div class="status-row">
+              <span>Autosave</span>
+              <strong id="saveStatus">Ready</strong>
+            </div>
+            <p class="note small">
+              Data stays only in this browser on this device.
+            </p>
+          </div>
+
+          <div class="sidebar-block">
+            <h3>Utilities</h3>
+            <div class="stack-actions">
+              <label class="button secondary file-button" for="importJsonInput">Import JSON backup</label>
+              <input id="importJsonInput" type="file" accept="application/json" hidden />
+              <button class="button ghost" id="clearDataButton" type="button">Clear saved data</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="intro card">
+            <h2>Question-by-question review</h2>
+            <p>
+              Each worksheet prompt is shown as its own card. Complete each card below.
+              Export options will appear after the worksheet is fully completed.
+            </p>
+          </div>
+
+          <div id="app"></div>
+
+          <section class="completion card hidden" id="completionPanel">
+            <div>
+              <span class="eyebrow">Ready to export</span>
+              <h2>Worksheet complete</h2>
+              <p>
+                You’ve completed all visible questions. Export a CSV for comparison or JSON for backup/import.
+              </p>
+            </div>
+            <div class="completion-actions">
+              <button class="button" id="exportCsvButton" type="button">Export CSV</button>
+              <button class="button secondary" id="exportJsonButton" type="button">Export JSON</button>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
   </body>
 </html>

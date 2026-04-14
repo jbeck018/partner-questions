@@ -5,6 +5,10 @@ const STORAGE_KEY = 'partnership-worksheet-answers-v1';
 const app = document.getElementById('app');
 const sectionNav = document.getElementById('sectionNav');
 const saveStatus = document.getElementById('saveStatus');
+const progressCount = document.getElementById('progressCount');
+const progressFill = document.getElementById('progressFill');
+const progressNote = document.getElementById('progressNote');
+const completionPanel = document.getElementById('completionPanel');
 const exportCsvButton = document.getElementById('exportCsvButton');
 const exportJsonButton = document.getElementById('exportJsonButton');
 const importJsonInput = document.getElementById('importJsonInput');
@@ -35,6 +39,10 @@ function persistAnswers() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.answers));
 }
 
+function hasValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
 function isVisible(rule) {
   if (!rule) return true;
   return (state.answers[rule.key] ?? '') === rule.equals;
@@ -47,6 +55,66 @@ function affectsVisibility(changedKey) {
       question.fields.some((field) => field.showWhen && field.showWhen.key === changedKey)
     )
   );
+}
+
+function getVisibleQuestions() {
+  return state.schema.flatMap((section) =>
+    section.questions
+      .filter((question) => isVisible(question.showWhen))
+      .map((question) => ({ section, question }))
+  );
+}
+
+function getVisibleFields(question) {
+  return question.fields.filter((field) => isVisible(field.showWhen));
+}
+
+function questionHasRepeatedRows(fields) {
+  return fields.some((field) => /_\d+_/.test(field.key));
+}
+
+function groupFieldsByRow(fields) {
+  const groups = new Map();
+  for (const field of fields) {
+    const match = field.key.match(/_(\d+)_/);
+    const rowKey = match ? match[1] : '__single';
+    if (!groups.has(rowKey)) groups.set(rowKey, []);
+    groups.get(rowKey).push(field);
+  }
+  return [...groups.values()];
+}
+
+function isQuestionComplete(question) {
+  const visibleFields = getVisibleFields(question);
+  if (!visibleFields.length) return true;
+
+  if (questionHasRepeatedRows(visibleFields)) {
+    const rowGroups = groupFieldsByRow(visibleFields);
+    let hasCompleteRow = false;
+
+    for (const rowFields of rowGroups) {
+      const answeredCount = rowFields.filter((field) => hasValue(state.answers[field.key])).length;
+      if (answeredCount === 0) continue;
+      if (answeredCount !== rowFields.length) return false;
+      hasCompleteRow = true;
+    }
+
+    return hasCompleteRow;
+  }
+
+  return visibleFields.every((field) => hasValue(state.answers[field.key]));
+}
+
+function getProgress() {
+  const visibleQuestions = getVisibleQuestions();
+  const complete = visibleQuestions.filter(({ question }) => isQuestionComplete(question)).length;
+  const total = visibleQuestions.length;
+  return {
+    complete,
+    total,
+    percent: total ? Math.round((complete / total) * 100) : 0,
+    allComplete: total > 0 && complete === total
+  };
 }
 
 function createInput(field) {
@@ -104,11 +172,24 @@ function createInput(field) {
   return wrapper;
 }
 
+function updateProgressUi() {
+  const progress = getProgress();
+  progressCount.textContent = `${progress.complete} / ${progress.total} questions`;
+  progressFill.style.width = `${progress.percent}%`;
+  progressNote.textContent = progress.allComplete
+    ? 'All visible questions are complete.'
+    : `${progress.total - progress.complete} questions remaining.`;
+  completionPanel.classList.toggle('hidden', !progress.allComplete);
+}
+
 function render() {
   app.innerHTML = '';
   sectionNav.innerHTML = '';
 
   state.schema.forEach((section) => {
+    const visibleQuestions = section.questions.filter((question) => isVisible(question.showWhen));
+    if (!visibleQuestions.length) return;
+
     const navLink = document.createElement('a');
     navLink.href = `#${section.id}`;
     navLink.textContent = section.title;
@@ -120,18 +201,26 @@ function render() {
 
     const header = document.createElement('div');
     header.className = 'section-header';
-    header.innerHTML = `<h2>${section.title}</h2>`;
+    header.innerHTML = `<h2>${section.title}</h2><p>${visibleQuestions.length} question${visibleQuestions.length === 1 ? '' : 's'} in this section</p>`;
     block.appendChild(header);
 
-    section.questions.forEach((question) => {
-      if (!isVisible(question.showWhen)) return;
-
+    visibleQuestions.forEach((question) => {
       const card = document.createElement('article');
       card.className = 'question-card';
+
+      const meta = document.createElement('div');
+      meta.className = 'question-meta';
 
       const label = document.createElement('div');
       label.className = 'question-label';
       label.textContent = question.number;
+
+      const badge = document.createElement('div');
+      const complete = isQuestionComplete(question);
+      badge.className = `question-badge${complete ? ' complete' : ''}`;
+      badge.textContent = complete ? 'Complete' : 'In progress';
+
+      meta.append(label, badge);
 
       const title = document.createElement('h3');
       title.className = 'question-title';
@@ -141,17 +230,23 @@ function render() {
       fieldsGrid.className = 'fields-grid';
       question.fields.forEach((field) => fieldsGrid.appendChild(createInput(field)));
 
-      card.append(label, title, fieldsGrid);
+      card.append(meta, title, fieldsGrid);
       block.appendChild(card);
     });
 
     app.appendChild(block);
   });
+
+  updateProgressUi();
 }
 
 function queueSave(key, value) {
   state.answers[key] = value;
-  if (affectsVisibility(key)) render();
+  if (affectsVisibility(key)) {
+    render();
+  } else {
+    updateProgressUi();
+  }
   setStatus('Saving…', 'saving');
 
   if (state.timers.has(key)) clearTimeout(state.timers.get(key));
@@ -159,6 +254,7 @@ function queueSave(key, value) {
   const timer = setTimeout(() => {
     try {
       persistAnswers();
+      updateProgressUi();
       setStatus(`Saved ${new Date().toLocaleTimeString()}`, 'saved');
     } catch (error) {
       console.error(error);
@@ -217,13 +313,16 @@ function downloadFile(filename, content, type) {
 }
 
 function exportCsv() {
+  if (!getProgress().allComplete) return;
   downloadFile('partnership-worksheet-export.csv', buildCsv(), 'text/csv;charset=utf-8');
   setStatus('CSV exported', 'saved');
 }
 
 function exportJson() {
+  if (!getProgress().allComplete) return;
   const payload = {
     exportedAt: new Date().toISOString(),
+    progress: getProgress(),
     answers: state.answers,
     rows: flattenFields()
   };
