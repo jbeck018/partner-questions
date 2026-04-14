@@ -8,7 +8,6 @@ const saveStatus = document.getElementById('saveStatus');
 const progressCount = document.getElementById('progressCount');
 const progressFill = document.getElementById('progressFill');
 const progressNote = document.getElementById('progressNote');
-const currentSectionTitle = document.getElementById('currentSectionTitle');
 const currentSectionSummary = document.getElementById('currentSectionSummary');
 const prevSectionButton = document.getElementById('prevSectionButton');
 const nextSectionButton = document.getElementById('nextSectionButton');
@@ -286,14 +285,12 @@ function updateProgressUi() {
   completionPanel.classList.toggle('hidden', !(progress.allComplete && state.reviewMode));
 
   if (progress.allComplete && state.reviewMode) {
-    currentSectionTitle.textContent = 'Final review';
-    currentSectionSummary.textContent = 'Use this summary to jump back into any section before exporting.';
+    currentSectionSummary.textContent = 'Final review is ready. Jump back into any section if you want to make changes before exporting.';
     renderReviewSummary();
   } else {
     const currentSection = state.schema[state.currentSectionIndex];
     const sectionProgress = getSectionProgress(currentSection);
-    currentSectionTitle.textContent = currentSection.title;
-    currentSectionSummary.textContent = `${sectionProgress.complete} of ${sectionProgress.total} questions completed in this section. ${getSectionDescription(currentSection)}`;
+    currentSectionSummary.textContent = `${currentSection.title} · ${sectionProgress.complete} of ${sectionProgress.total} questions complete`;
   }
 
   prevSectionButton.disabled = state.reviewMode || state.currentSectionIndex === 0;

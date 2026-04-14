@@ -281,12 +281,11 @@ a { color: inherit; }
 
 .intro {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
 
-.intro h2,
 .completion h2 {
   margin: 12px 0 8px;
   font-size: clamp(28px, 4vw, 42px);
