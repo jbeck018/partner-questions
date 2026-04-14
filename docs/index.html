@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Partnership Worksheet Form</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Partnership Worksheet</h1>
+        <p>Simple autosaving form based on the PDF.</p>
+      </div>
+      <div class="actions">
+        <button class="button secondary" id="exportCsvButton" type="button">Export CSV</button>
+        <button class="button secondary" id="exportJsonButton" type="button">Export JSON</button>
+        <label class="button secondary file-button" for="importJsonInput">Import JSON</label>
+        <input id="importJsonInput" type="file" accept="application/json" hidden />
+        <button class="button secondary" id="clearDataButton" type="button">Clear saved data</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <h2>Sections</h2>
+        <nav id="sectionNav"></nav>
+        <div class="note">
+          <strong>Autosave:</strong>
+          <span id="saveStatus">Ready</span>
+        </div>
+        <div class="note small">
+          Data is saved only in this browser on this device. No backend is required.
+        </div>
+        <div class="note small">
+          Export CSV or JSON anytime so responses can be compared or processed easily.
+        </div>
+      </aside>
+
+      <section class="content">
+        <div class="intro card">
+          <h2>Question-by-question review</h2>
+          <p>
+            Every prompt from the worksheet is listed below as its own card to make review easy.
+            Change any field and it will autosave.
+          </p>
+        </div>
+        <div id="app"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
