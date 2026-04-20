@@ -25,6 +25,7 @@ const prevSectionButton = document.getElementById('prevSectionButton');
 const nextSectionButton = document.getElementById('nextSectionButton');
 const completionPanel = document.getElementById('completionPanel');
 const reviewGrid = document.getElementById('reviewGrid');
+const completionFeedback = document.getElementById('completionFeedback');
 const backToFormButton = document.getElementById('backToFormButton');
 const exportCsvButton = document.getElementById('exportCsvButton');
 const exportJsonButton = document.getElementById('exportJsonButton');
@@ -56,6 +57,12 @@ const state = {
 function setStatus(message, className = '') {
   saveStatus.textContent = message;
   saveStatus.className = className;
+}
+
+function setCompletionFeedback(message = '', tone = 'saved') {
+  if (!completionFeedback) return;
+  completionFeedback.textContent = message;
+  completionFeedback.className = `completion-feedback${message ? ` completion-feedback-${tone}` : ' hidden'}`;
 }
 
 function getToastStack() {
@@ -958,6 +965,7 @@ function openReviewExport() {
     render();
     const message = 'Complete the remaining visible questions before exporting. We jumped to the next section that needs attention.';
     setStatus(message, 'error');
+    setCompletionFeedback('');
     showToast(message, 'error');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return false;
@@ -967,6 +975,7 @@ function openReviewExport() {
   render();
   const message = 'Review your answers, then use Export CSV or Export JSON below. Files download to your browser.';
   setStatus(message, 'saved');
+  setCompletionFeedback('Ready to export. Choose CSV for spreadsheets or JSON for backup/import.', 'saved');
   showToast(message, 'saved');
   requestAnimationFrame(() => completionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   return true;
@@ -979,6 +988,7 @@ function exportCsv() {
   }
   downloadFile('partnership-worksheet-export.csv', buildCsv(state.schema, state.answers), 'text/csv;charset=utf-8');
   setStatus('CSV downloaded to your browser.', 'saved');
+  setCompletionFeedback('CSV export started. Look for partnership-worksheet-export.csv in your browser downloads.', 'saved');
   showToast('CSV export started. Check your browser downloads.', 'saved');
 }
 
@@ -995,6 +1005,7 @@ function exportJson() {
   };
   downloadFile('partnership-worksheet-export.json', JSON.stringify(payload, null, 2), 'application/json');
   setStatus('JSON downloaded to your browser.', 'saved');
+  setCompletionFeedback('JSON export started. Look for partnership-worksheet-export.json in your browser downloads.', 'saved');
   showToast('JSON export started. Check your browser downloads.', 'saved');
 }
 
@@ -1057,6 +1068,7 @@ function bindActions() {
   nextSectionButton.addEventListener('click', goToNextSection);
   backToFormButton.addEventListener('click', () => {
     state.reviewMode = false;
+    setCompletionFeedback('');
     render();
   });
 }
