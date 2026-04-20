@@ -28,6 +28,7 @@ const reviewGrid = document.getElementById('reviewGrid');
 const backToFormButton = document.getElementById('backToFormButton');
 const exportCsvButton = document.getElementById('exportCsvButton');
 const exportJsonButton = document.getElementById('exportJsonButton');
+const reviewExportButton = document.getElementById('reviewExportButton');
 const importJsonInput = document.getElementById('importJsonInput');
 const clearDataButton = document.getElementById('clearDataButton');
 
@@ -37,6 +38,7 @@ const state = {
   timers: new Map(),
   currentSectionIndex: 0,
   reviewMode: false,
+  toastTimer: null,
   ai: {
     engine: null,
     status: 'idle',
@@ -54,6 +56,39 @@ const state = {
 function setStatus(message, className = '') {
   saveStatus.textContent = message;
   saveStatus.className = className;
+}
+
+function getToastStack() {
+  let stack = document.getElementById('toastStack');
+  if (stack) return stack;
+
+  stack = document.createElement('div');
+  stack.id = 'toastStack';
+  stack.className = 'toast-stack';
+  stack.setAttribute('aria-live', 'polite');
+  stack.setAttribute('aria-atomic', 'true');
+  document.body.appendChild(stack);
+  return stack;
+}
+
+function showToast(message, tone = 'saved') {
+  const stack = getToastStack();
+  stack.innerHTML = '';
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tone}`;
+  toast.textContent = message;
+  stack.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add('visible'));
+
+  if (state.toastTimer) clearTimeout(state.toastTimer);
+  state.toastTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+    window.setTimeout(() => {
+      if (toast.parentNode) toast.remove();
+    }, 180);
+  }, 3200);
 }
 
 function loadAnswers() {
@@ -866,13 +901,15 @@ function render() {
 function queueSave(key, value) {
   state.answers[key] = value;
   state.reviewMode = false;
-  if (affectsVisibility(key) || key.startsWith('a1_partner_') || key.startsWith('d2_partner_')) {
+
+  const requiresFullRender = affectsVisibility(key) || key.startsWith('a1_partner_') || key.startsWith('d2_partner_');
+  if (requiresFullRender) {
     render();
   } else {
     updateProgressUi();
     renderSectionNav();
-    renderCurrentSection();
   }
+
   setStatus('Saving…', 'saving');
 
   if (state.timers.has(key)) clearTimeout(state.timers.get(key));
@@ -881,12 +918,13 @@ function queueSave(key, value) {
     try {
       persistAnswers();
       updateProgressUi();
+      renderSectionNav();
       setStatus(`Saved ${new Date().toLocaleTimeString()}`, 'saved');
     } catch (error) {
       console.error(error);
       setStatus('Save failed', 'error');
     }
-  }, 200);
+  }, 250);
 
   state.timers.set(key, timer);
 }
@@ -907,14 +945,48 @@ function downloadFile(filename, content, type) {
   URL.revokeObjectURL(url);
 }
 
+function getFirstIncompleteSectionIndex() {
+  const index = state.schema.findIndex((section) => !getSectionProgress(section).allComplete);
+  return index === -1 ? 0 : index;
+}
+
+function openReviewExport() {
+  const progress = getProgress();
+  if (!progress.allComplete) {
+    state.reviewMode = false;
+    state.currentSectionIndex = getFirstIncompleteSectionIndex();
+    render();
+    const message = 'Complete the remaining visible questions before exporting. We jumped to the next section that needs attention.';
+    setStatus(message, 'error');
+    showToast(message, 'error');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return false;
+  }
+
+  state.reviewMode = true;
+  render();
+  const message = 'Review your answers, then use Export CSV or Export JSON below. Files download to your browser.';
+  setStatus(message, 'saved');
+  showToast(message, 'saved');
+  requestAnimationFrame(() => completionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  return true;
+}
+
 function exportCsv() {
-  if (!getProgress().allComplete) return;
+  if (!getProgress().allComplete) {
+    openReviewExport();
+    return;
+  }
   downloadFile('partnership-worksheet-export.csv', buildCsv(state.schema, state.answers), 'text/csv;charset=utf-8');
-  setStatus('CSV exported', 'saved');
+  setStatus('CSV downloaded to your browser.', 'saved');
+  showToast('CSV export started. Check your browser downloads.', 'saved');
 }
 
 function exportJson() {
-  if (!getProgress().allComplete) return;
+  if (!getProgress().allComplete) {
+    openReviewExport();
+    return;
+  }
   const payload = {
     exportedAt: new Date().toISOString(),
     progress: getProgress(),
@@ -922,7 +994,8 @@ function exportJson() {
     rows: getFlatRows()
   };
   downloadFile('partnership-worksheet-export.json', JSON.stringify(payload, null, 2), 'application/json');
-  setStatus('JSON exported', 'saved');
+  setStatus('JSON downloaded to your browser.', 'saved');
+  showToast('JSON export started. Check your browser downloads.', 'saved');
 }
 
 function importJsonFile(file) {
@@ -965,11 +1038,7 @@ function goToPreviousSection() {
 function goToNextSection() {
   const progress = getProgress();
   if (state.currentSectionIndex >= state.schema.length - 1) {
-    if (progress.allComplete) {
-      state.reviewMode = true;
-      render();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    if (progress.allComplete) openReviewExport();
     return;
   }
   state.reviewMode = false;
@@ -981,6 +1050,7 @@ function goToNextSection() {
 function bindActions() {
   exportCsvButton.addEventListener('click', exportCsv);
   exportJsonButton.addEventListener('click', exportJson);
+  reviewExportButton.addEventListener('click', openReviewExport);
   importJsonInput.addEventListener('change', (event) => importJsonFile(event.target.files?.[0]));
   clearDataButton.addEventListener('click', clearSavedData);
   prevSectionButton.addEventListener('click', goToPreviousSection);

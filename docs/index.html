@@ -64,10 +64,12 @@
             <div class="sidebar-block">
               <h3>Utilities</h3>
               <div class="stack-actions">
+                <button class="button" id="reviewExportButton" type="button">Review &amp; export</button>
                 <label class="button secondary file-button" for="importJsonInput">Import JSON backup</label>
                 <input id="importJsonInput" type="file" accept="application/json" hidden />
                 <button class="button ghost" id="clearDataButton" type="button">Clear saved data</button>
               </div>
+              <p class="note small">When complete, exports download to your browser's default Downloads folder.</p>
             </div>
           </div>
         </aside>
@@ -91,7 +93,7 @@
               <span class="eyebrow subtle">Final review</span>
               <h2>Review before export</h2>
               <p>
-                Everything is complete. Do one final pass across the section summary below, then export CSV or JSON.
+                Everything is complete. Do one final pass across the section summary below, then export CSV or JSON. Exported files download to your browser's default Downloads folder.
               </p>
             </div>
             <div class="review-grid" id="reviewGrid"></div>
