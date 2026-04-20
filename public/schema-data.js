@@ -361,6 +361,7 @@ export const FORM_SCHEMA = [
         id: 'd2',
         number: 'D2',
         prompt: 'Agreement signatures',
+        optional: true,
         fields: [1, 2, 3].flatMap((i) => ([
           { key: `d2_partner_${i}_name`, label: `Signer ${i} name`, type: 'text' },
           { key: `d2_partner_${i}_signature`, label: `Signer ${i} signature`, type: 'text' },
@@ -372,6 +373,7 @@ export const FORM_SCHEMA = [
         id: 'd3',
         number: 'D3',
         prompt: 'Witness',
+        optional: true,
         fields: [
           { key: 'd3_witness_name', label: 'Witness name', type: 'text' },
           { key: 'd3_witness_date', label: 'Witness date', type: 'date' }

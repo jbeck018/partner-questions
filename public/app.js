@@ -174,6 +174,9 @@ function isQuestionComplete(question) {
   const visibleFields = getVisibleFields(question);
   if (!visibleFields.length) return true;
 
+  const hasAnyAnswer = visibleFields.some((field) => hasValue(state.answers[field.key]));
+  if (question.optional && !hasAnyAnswer) return true;
+
   if (question.id === 'd2') {
     const expectedRows = getExpectedSignerRows();
     const rowGroups = groupFieldsByRow(visibleFields).filter((group) => group[0]?.key.includes('partner_'));
@@ -186,7 +189,7 @@ function isQuestionComplete(question) {
       completeRows += 1;
     }
 
-    return completeRows >= expectedRows;
+    return question.optional ? completeRows === 0 || completeRows >= expectedRows : completeRows >= expectedRows;
   }
 
   if (questionHasRepeatedRows(visibleFields)) {
@@ -200,10 +203,10 @@ function isQuestionComplete(question) {
       hasCompleteRow = true;
     }
 
-    return hasCompleteRow;
+    return question.optional ? !hasAnyAnswer || hasCompleteRow : hasCompleteRow;
   }
 
-  return visibleFields.every((field) => hasValue(state.answers[field.key]));
+  return question.optional ? !hasAnyAnswer || visibleFields.every((field) => hasValue(state.answers[field.key])) : visibleFields.every((field) => hasValue(state.answers[field.key]));
 }
 
 function getAllVisibleQuestions() {
@@ -240,7 +243,7 @@ function getQuestionHelp(question) {
   const visibleFields = getVisibleFields(question);
   if (!visibleFields.length) return '';
   if (question.id === 'd2') {
-    return `Complete signatures for the partners you listed earlier. Currently expecting ${getExpectedSignerRows()} completed signer row${getExpectedSignerRows() === 1 ? '' : 's'}.`;
+    return `Optional. Leave blank if you do not need signatures here. If you do fill it in, complete all fields for ${getExpectedSignerRows()} signer row${getExpectedSignerRows() === 1 ? '' : 's'}.`;
   }
   if (question.id === 'a1') {
     return 'If nobody is contributing initial capital, choose No and continue. If Yes, complete at least one full row.';
@@ -251,8 +254,11 @@ function getQuestionHelp(question) {
   if (question.id === 'b12') {
     return 'If no partner receives a salary, choose No and continue. If Yes, complete at least one full row.';
   }
+  if (question.id === 'd3') {
+    return 'Optional. Leave blank if no witness is needed. If you fill it in, complete both fields.';
+  }
   if (questionHasRepeatedRows(visibleFields)) {
-    return 'Complete at least one full row. Leave unused rows entirely blank.';
+    return `${question.optional ? 'Optional. ' : ''}Complete at least one full row. Leave unused rows entirely blank.`;
   }
   if (visibleFields.some((field) => field.type === 'radio')) {
     return 'Choose the response that best reflects your agreement.';
@@ -701,7 +707,7 @@ function renderCurrentSection() {
     const badge = document.createElement('div');
     const complete = isQuestionComplete(question);
     badge.className = `question-badge${complete ? ' complete' : ''}`;
-    badge.textContent = complete ? 'Complete' : 'Needs attention';
+    badge.textContent = complete ? (question.optional ? 'Optional' : 'Complete') : 'Needs attention';
 
     meta.append(label, badge);
 
